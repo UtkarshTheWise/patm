@@ -44,6 +44,8 @@ const MOOD_PUSH = {
 
 // ---------- app ----------
 const app = express();
+// Liveness probe for the host (Render's healthCheckPath). Deliberately doesn't touch Supabase.
+app.get("/healthz", (_req, res) => res.type("text").send("ok"));
 app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 app.get("/vendor/supabase.js", (_req, res) =>
