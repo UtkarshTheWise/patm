@@ -1,7 +1,7 @@
 // Service worker: shows push notifications and caches the app shell.
-const CACHE = "patm-v3";
+const CACHE = "patm-v4";
 const SHELL = [
-  "/", "/index.html", "/style.css", "/app.js", "/sprites.js", "/ui.js",
+  "/", "/index.html", "/style.css", "/app.js", "/sprites.js", "/ui.js", "/music.js",
   "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png",
   "/vendor/supabase.js", "/vendor/gsap.js",
 ];
@@ -27,7 +27,8 @@ self.addEventListener("activate", (e) => {
 // Network first for everything; fall back to cache for the shell when offline.
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
+  // Audio is left to the browser: it streams with Range requests, which a cached copy can't answer.
+  if (e.request.method !== "GET" || url.pathname.startsWith("/api/") || url.pathname.startsWith("/audio/")) return;
   e.respondWith(fetch(e.request).catch(() => caches.match(e.request).then((r) => r || caches.match("/"))));
 });
 

@@ -392,6 +392,21 @@ $("#sprite-me").onclick = async () => {
 
 $("#btn-push").onclick = () => busy($("#btn-push"), enablePush);
 
+// Music: one toggle per screen, all showing the same state.
+const musicBtns = document.querySelectorAll(".music-toggle");
+function paintMusic() {
+  for (const b of musicBtns) {
+    b.hidden = !MUSIC.supported;
+    b.setAttribute("aria-pressed", String(MUSIC.on));
+  }
+}
+for (const b of musicBtns)
+  b.onclick = () => {
+    MUSIC.toggle();
+    paintMusic();
+  };
+paintMusic();
+
 // Menu
 // Reachable from every signed-in screen, so you can always sign out or unpair.
 async function openMenu() {

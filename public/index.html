@@ -34,6 +34,7 @@
 
     <!-- Title screen -->
     <section id="signin" class="screen screen-center stagger" hidden>
+      <button class="scene-btn music-toggle" aria-label="Music" aria-pressed="true"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M6 2h8v2H8v8H6zM12 4h2v6h-2zM3 10h5v4H3zM9 8h5v4H9z"/></svg></button>
       <div class="title-art">
         <div class="title-octo" id="title-octo"></div>
       </div>
@@ -52,6 +53,7 @@
     <section id="pairup" class="screen stagger" hidden>
       <div class="screen-head">
         <h2 class="screen-title">Pair up</h2>
+        <button class="scene-btn music-toggle" aria-label="Music" aria-pressed="true"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M6 2h8v2H8v8H6zM12 4h2v6h-2zM3 10h5v4H3zM9 8h5v4H9z"/></svg></button>
         <button class="scene-btn menu-open" aria-label="Menu">☰</button>
       </div>
       <div class="box dialogue">
@@ -73,6 +75,7 @@
     <section id="waiting" class="screen stagger" hidden>
       <div class="screen-head">
         <h2 class="screen-title">Send them this code</h2>
+        <button class="scene-btn music-toggle" aria-label="Music" aria-pressed="true"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M6 2h8v2H8v8H6zM12 4h2v6h-2zM3 10h5v4H3zM9 8h5v4H9z"/></svg></button>
         <button class="scene-btn menu-open" aria-label="Menu">☰</button>
       </div>
       <div class="code-plate">
@@ -123,6 +126,7 @@
           </div>
 
           <button id="btn-menu" class="scene-btn menu-open" aria-label="Menu">☰</button>
+          <button class="scene-btn music-toggle" aria-label="Music" aria-pressed="true"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M6 2h8v2H8v8H6zM12 4h2v6h-2zM3 10h5v4H3zM9 8h5v4H9z"/></svg></button>
           <div class="mood-hint tiny-caps" id="mood-hint">tap you to flip mood</div>
           <div class="fx" id="fx" aria-hidden="true"></div>
           <div class="flash" id="flash" aria-hidden="true"></div>
@@ -188,6 +192,7 @@
   <script src="/vendor/gsap.js"></script>
   <script src="/sprites.js"></script>
   <script src="/ui.js"></script>
+  <script src="/music.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
