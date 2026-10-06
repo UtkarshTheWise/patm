@@ -50,7 +50,10 @@
 
     <!-- Pair up -->
     <section id="pairup" class="screen stagger" hidden>
-      <h2 class="screen-title">Pair up</h2>
+      <div class="screen-head">
+        <h2 class="screen-title">Pair up</h2>
+        <button class="scene-btn menu-open" aria-label="Menu">☰</button>
+      </div>
       <div class="box dialogue">
         <p id="hello">Hi!</p>
       </div>
@@ -68,7 +71,10 @@
 
     <!-- Waiting for partner -->
     <section id="waiting" class="screen stagger" hidden>
-      <h2 class="screen-title">Send them this code</h2>
+      <div class="screen-head">
+        <h2 class="screen-title">Send them this code</h2>
+        <button class="scene-btn menu-open" aria-label="Menu">☰</button>
+      </div>
       <div class="code-plate">
         <div id="my-code" class="code" aria-live="polite">------</div>
       </div>
@@ -116,7 +122,7 @@
             </div>
           </div>
 
-          <button id="btn-menu" class="scene-btn" aria-label="Settings">☰</button>
+          <button id="btn-menu" class="scene-btn menu-open" aria-label="Menu">☰</button>
           <div class="mood-hint tiny-caps" id="mood-hint">tap you to flip mood</div>
           <div class="fx" id="fx" aria-hidden="true"></div>
           <div class="flash" id="flash" aria-hidden="true"></div>
@@ -167,7 +173,7 @@
         </label>
         <div class="menu-list">
           <button id="btn-save-name" class="menu-item">Save name</button>
-          <button id="btn-leave" class="menu-item">Leave pair</button>
+          <button id="btn-leave" class="menu-item">Unpair</button>
           <button id="btn-signout" class="menu-item">Sign out</button>
           <button id="btn-delete" class="menu-item danger">Delete my account</button>
         </div>

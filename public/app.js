@@ -4,21 +4,36 @@
 // All motion goes through UI (ui.js); all art comes from SPRITES (sprites.js).
 const $ = (s) => document.querySelector(s);
 
-let sb = null;          // Supabase client (auth only — no direct table access from the browser)
-let config = null;      // { supabaseUrl, supabaseKey, vapidPublicKey }
-let state = null;       // last /api/me response
+let sb = null; // Supabase client (auth only — no direct table access from the browser)
+let config = null; // { supabaseUrl, supabaseKey, vapidPublicKey }
+let state = null; // last /api/me response
 let level = 1;
 let pollTimer = null;
 
 // The three attention moves, dressed as battle moves.
 const MOVES = {
-  1: { name: "Need Attention",  type: "NEEDY",   pp: "15/15", hit: "It landed softly." },
-  2: { name: "Thinking of You", type: "SWEET",   pp: "20/20", hit: "It was sweet!" },
-  3: { name: "Missing You",     type: "LONGING", pp: "10/10", hit: "It's super effective!" },
+  1: {
+    name: "Need Attention",
+    type: "YEARNING",
+    pp: "15/15",
+    hit: "It landed softly.",
+  },
+  2: {
+    name: "Thinking of You",
+    type: "SWEET",
+    pp: "20/20",
+    hit: "It was sweet!",
+  },
+  3: {
+    name: "Missing You",
+    type: "LONGING",
+    pp: "10/10",
+    hit: "It's super effective!",
+  },
 };
 
 const MOODS = ["happy", "angry", "sad"];
-const POKE_COOLDOWN_MS = 10_000;   // matches the server
+const POKE_COOLDOWN_MS = 10_000; // matches the server
 const ATTENTION_DECAY_MS = 6 * 60 * 60 * 1000;
 
 let myMood = "happy";
@@ -35,11 +50,17 @@ async function api(path, body) {
   const token = data.session?.access_token;
   const res = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(json.error || "Something went wrong"), { status: res.status });
+  if (!res.ok)
+    throw Object.assign(new Error(json.error || "Something went wrong"), {
+      status: res.status,
+    });
   return json;
 }
 
@@ -67,13 +88,23 @@ function ago(ts) {
 async function busy(btn, fn) {
   UI.press(btn);
   btn.disabled = true;
-  try { await fn(); } catch (e) { toast(e.message); } finally { btn.disabled = false; }
+  try {
+    await fn();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone =
-  window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  window.matchMedia("(display-mode: standalone)").matches ||
+  navigator.standalone === true;
+const pushSupported =
+  "serviceWorker" in navigator &&
+  "PushManager" in window &&
+  "Notification" in window;
 
 // ---------- battle scene ----------
 function say(text, opts) {
@@ -101,7 +132,10 @@ function paintSprite(which, mood) {
   const label = SPRITES.MOOD[mood].label;
   if (which === "me") {
     $("#me-mood-label").textContent = label;
-    el.setAttribute("aria-label", `Your mood: ${label.toLowerCase()}. Tap to flip it.`);
+    el.setAttribute(
+      "aria-label",
+      `Your mood: ${label.toLowerCase()}. Tap to flip it.`,
+    );
   } else {
     $("#foe-mood-label").textContent = label;
   }
@@ -120,7 +154,8 @@ function selectMove(btn, opts) {
     m.setAttribute("aria-checked", String(m === btn));
   }
   $("#move-type").textContent = `TYPE/ ${MOVES[level].type}`;
-  if (Date.now() >= cooldownUntil) $("#move-pp").textContent = `PP ${MOVES[level].pp}`;
+  if (Date.now() >= cooldownUntil)
+    $("#move-pp").textContent = `PP ${MOVES[level].pp}`;
   UI.cursorTo($("#cursor"), btn);
   // Say so out loud — otherwise the first tap of a two-tap send looks like nothing happened.
   if (!(opts && opts.quiet) && Date.now() >= cooldownUntil) {
@@ -129,7 +164,8 @@ function selectMove(btn, opts) {
 }
 
 function setMovesEnabled(on) {
-  for (const m of document.querySelectorAll(".move[data-level]")) m.disabled = !on;
+  for (const m of document.querySelectorAll(".move[data-level]"))
+    m.disabled = !on;
 }
 
 function tickCooldown() {
@@ -154,7 +190,8 @@ function startCooldown(ms) {
 // ---------- render ----------
 function render(s) {
   state = s;
-  $("#hello").textContent = `Hi ${s.name}! Start a pair and send your person the code, or enter theirs.`;
+  $("#hello").textContent =
+    `Hi ${s.name}! Start a pair and send your person the code, or enter theirs.`;
 
   if (s.mood && MOODS.includes(s.mood) && !moodTimer) myMood = s.mood;
 
@@ -178,12 +215,17 @@ function render(s) {
   UI.setBar($("#bar-foe"), attention(true));
   // The scene was hidden when the move was first selected, so the cursor had
   // nothing to measure. Re-seat it now that there is layout.
-  UI.cursorTo($("#cursor"), document.querySelector('.move[aria-checked="true"]'));
+  UI.cursorTo(
+    $("#cursor"),
+    document.querySelector('.move[aria-checked="true"]'),
+  );
 
   const needsInstall = isIOS && !isStandalone;
   $("#ios-banner").hidden = !needsInstall;
   $("#push-banner").hidden =
-    needsInstall || !pushSupported || (Notification.permission === "granted" && s.hasPush);
+    needsInstall ||
+    !pushSupported ||
+    (Notification.permission === "granted" && s.hasPush);
 
   const ul = $("#history");
   ul.innerHTML = "";
@@ -195,7 +237,10 @@ function render(s) {
     ul.appendChild(li);
   }
 
-  if (firstHome) { firstHome = false; idlePrompt(); }
+  if (firstHome) {
+    firstHome = false;
+    idlePrompt();
+  }
 }
 
 async function refresh() {
@@ -204,13 +249,20 @@ async function refresh() {
   try {
     render(await api("/api/me"));
   } catch (e) {
-    if (e.status === 401) { await sb.auth.signOut(); show("signin"); }
-    else toast(e.message);
+    if (e.status === 401) {
+      await sb.auth.signOut();
+      show("signin");
+    } else toast(e.message);
   }
 }
 
-function startPolling() { if (!pollTimer) pollTimer = setInterval(refresh, 3000); }
-function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+function startPolling() {
+  if (!pollTimer) pollTimer = setInterval(refresh, 3000);
+}
+function stopPolling() {
+  clearInterval(pollTimer);
+  pollTimer = null;
+}
 
 // ---------- push ----------
 function urlB64ToUint8Array(b64) {
@@ -222,7 +274,8 @@ function urlB64ToUint8Array(b64) {
 async function enablePush() {
   if (!pushSupported) return toast("This browser can't do notifications.");
   const perm = await Notification.requestPermission(); // must come from a tap on iOS
-  if (perm !== "granted") return toast("Notifications are off. You can change this in Settings.");
+  if (perm !== "granted")
+    return toast("Notifications are off. You can change this in Settings.");
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
@@ -237,33 +290,44 @@ async function enablePush() {
 }
 
 // ---------- events ----------
-$("#btn-google").onclick = () => busy($("#btn-google"), async () => {
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: location.origin + "/" },
+$("#btn-google").onclick = () =>
+  busy($("#btn-google"), async () => {
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: location.origin + "/" },
+    });
+    if (error) throw error;
   });
-  if (error) throw error;
-});
 
-$("#btn-create").onclick = () => busy($("#btn-create"), async () => render(await api("/api/pair", {})));
+$("#btn-create").onclick = () =>
+  busy($("#btn-create"), async () => render(await api("/api/pair", {})));
 
-$("#btn-join").onclick = () => busy($("#btn-join"), async () => {
-  const code = $("#code").value.trim().toUpperCase();
-  if (code.length !== 6) return toast("Codes are 6 characters");
-  render(await api("/api/join", { code }));
-});
+$("#btn-join").onclick = () =>
+  busy($("#btn-join"), async () => {
+    const code = $("#code").value.trim().toUpperCase();
+    if (code.length !== 6) return toast("Codes are 6 characters");
+    render(await api("/api/join", { code }));
+  });
 
-$("#btn-havecode").onclick = () => { show("pairup"); $("#code").focus(); };
+$("#btn-havecode").onclick = () => {
+  show("pairup");
+  $("#code").focus();
+};
 
 $("#btn-share").onclick = async () => {
   UI.press($("#btn-share"));
   const text = `Join me on Pay Attention To Me. My code: ${state.code}\n${location.origin}`;
   if (navigator.share) navigator.share({ text }).catch(() => {});
-  else { await navigator.clipboard?.writeText(text); toast("Copied"); }
+  else {
+    await navigator.clipboard?.writeText(text);
+    toast("Copied");
+  }
 };
 
 for (const b of document.querySelectorAll(".move[data-level]")) {
-  b.addEventListener("pointerenter", () => { if (!b.disabled) UI.cursorTo($("#cursor"), b); });
+  b.addEventListener("pointerenter", () => {
+    if (!b.disabled) UI.cursorTo($("#cursor"), b);
+  });
   b.onclick = () => useMove(b);
 }
 
@@ -271,7 +335,10 @@ for (const b of document.querySelectorAll(".move[data-level]")) {
 // One tap does both when it is already selected, so it never feels sticky.
 async function useMove(btn) {
   const lvl = Number(btn.dataset.level);
-  if (lvl !== level) { selectMove(btn); return; }
+  if (lvl !== level) {
+    selectMove(btn);
+    return;
+  }
   if (Date.now() < cooldownUntil) return;
 
   const move = MOVES[level];
@@ -279,8 +346,11 @@ async function useMove(btn) {
   navigator.vibrate?.(level === 3 ? [80, 40, 80, 40, 120] : 60);
 
   const anim = UI.attack({
-    me: $("#sprite-me"), foe: $("#sprite-foe"),
-    layer: $("#fx"), scene: $("#scene"), level,
+    me: $("#sprite-me"),
+    foe: $("#sprite-foe"),
+    layer: $("#fx"),
+    scene: $("#scene"),
+    level,
   });
   say(`${state?.name || "You"} used ${move.name.toUpperCase()}!`);
 
@@ -288,7 +358,9 @@ async function useMove(btn) {
     const r = await api("/api/poke", { level });
     await anim;
     render(r.state);
-    await say(r.delivered ? move.hit : "…but they haven't turned on notifications yet.");
+    await say(
+      r.delivered ? move.hit : "…but they haven't turned on notifications yet.",
+    );
     startCooldown(POKE_COOLDOWN_MS);
   } catch (e) {
     await anim;
@@ -310,47 +382,71 @@ $("#sprite-me").onclick = async () => {
   clearTimeout(moodTimer);
   moodTimer = setTimeout(async () => {
     moodTimer = null;
-    try { render(await api("/api/mood", { mood: myMood })); }
-    catch (e) { toast(e.message); }
+    try {
+      render(await api("/api/mood", { mood: myMood }));
+    } catch (e) {
+      toast(e.message);
+    }
   }, 1200);
 };
 
 $("#btn-push").onclick = () => busy($("#btn-push"), enablePush);
 
 // Menu
-$("#btn-menu").onclick = async () => {
+// Reachable from every signed-in screen, so you can always sign out or unpair.
+async function openMenu() {
   const { data } = await sb.auth.getSession();
   const email = data.session?.user?.email;
   $("#menu-who").textContent = email ? `Signed in as ${email}` : "";
   $("#menu-name").value = state?.name || "";
+  // Unpair when paired, cancel the code while waiting, nothing to leave otherwise.
+  const leave = $("#btn-leave");
+  leave.hidden = !state?.paired && !state?.code;
+  leave.textContent = state?.paired
+    ? `Unpair from ${state.partnerName}`
+    : "Cancel my code";
   $("#menu").showModal();
   UI.pop($(".menu"), { from: 0.88 });
-};
+}
+for (const b of document.querySelectorAll(".menu-open")) b.onclick = openMenu;
 $("#btn-close").onclick = () => $("#menu").close();
-$("#btn-save-name").onclick = () => busy($("#btn-save-name"), async () => {
-  render(await api("/api/name", { name: $("#menu-name").value }));
-  toast("Saved");
-});
-$("#btn-leave").onclick = () => busy($("#btn-leave"), async () => {
-  if (!confirm(`Unpair from ${state?.partnerName || "your partner"}?`)) return;
-  await api("/api/leave", {});
-  $("#menu").close();
-  refresh();
-});
-$("#btn-signout").onclick = async () => {
-  await sb.auth.signOut();
-  $("#menu").close();
-  show("signin");
-};
-$("#btn-delete").onclick = () => busy($("#btn-delete"), async () => {
-  if (!confirm("Delete your account and all your pokes? This can't be undone.")) return;
-  await api("/api/account/delete", {});
-  await sb.auth.signOut();
-  $("#menu").close();
-  show("signin");
-});
+$("#btn-save-name").onclick = () =>
+  busy($("#btn-save-name"), async () => {
+    render(await api("/api/name", { name: $("#menu-name").value }));
+    toast("Saved");
+  });
+$("#btn-leave").onclick = () =>
+  busy($("#btn-leave"), async () => {
+    const ask = state?.paired
+      ? `Unpair from ${state.partnerName}? You'll need a new code to pair again.`
+      : "Cancel your code?";
+    if (!confirm(ask)) return;
+    await api("/api/leave", {});
+    $("#menu").close();
+    toast(state?.paired ? "Unpaired" : "Code cancelled");
+    await refresh();
+  });
+$("#btn-signout").onclick = () =>
+  busy($("#btn-signout"), async () => {
+    await sb.auth.signOut();
+    $("#menu").close();
+    show("signin");
+  });
+$("#btn-delete").onclick = () =>
+  busy($("#btn-delete"), async () => {
+    if (
+      !confirm("Delete your account and all your pokes? This can't be undone.")
+    )
+      return;
+    await api("/api/account/delete", {});
+    await sb.auth.signOut();
+    $("#menu").close();
+    show("signin");
+  });
 
-document.addEventListener("visibilitychange", () => { if (!document.hidden && sb) refresh(); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && sb) refresh();
+});
 window.addEventListener("resize", () => {
   const sel = document.querySelector('.move[aria-checked="true"]');
   if (sel && !$("#home").hidden) UI.cursorTo($("#cursor"), sel);
@@ -360,9 +456,9 @@ window.addEventListener("resize", () => {
 function dressTheSky() {
   const clouds = $("#sky-clouds");
   const spots = [
-    { left: "2%",  top: "6%",  w: 120, d: 0 },
-    { left: "66%", top: "3%",  w: 150, d: 2 },
-    { left: "8%",  top: "34%", w: 90,  d: 4 },
+    { left: "2%", top: "6%", w: 120, d: 0 },
+    { left: "66%", top: "3%", w: 150, d: 2 },
+    { left: "8%", top: "34%", w: 90, d: 4 },
   ];
   for (const s of spots) {
     const el = document.createElement("div");
@@ -386,14 +482,20 @@ function dressTheSky() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
   try {
     config = await (await fetch("/api/config")).json();
-    if (!config.supabaseUrl || !config.supabaseKey) throw new Error("Server is missing Supabase config");
+    if (!config.supabaseUrl || !config.supabaseKey)
+      throw new Error("Server is missing Supabase config");
     sb = window.supabase.createClient(config.supabaseUrl, config.supabaseKey, {
-      auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true },
+      auth: {
+        flowType: "pkce",
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
     });
     // Fires after the Google redirect lands back here, and on sign-out elsewhere
     // (setTimeout: calling Supabase from inside this callback can deadlock its auth lock)
     sb.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(refresh, 0);
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT")
+        setTimeout(refresh, 0);
     });
     await refresh();
   } catch (e) {
