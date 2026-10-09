@@ -574,6 +574,16 @@ async function openMenu() {
 }
 for (const b of $$(".menu-open")) b.onclick = openMenu;
 $("#btn-close").onclick = () => $("#menu").close();
+// Pull in a new version: drop cached files, update the service worker, then reload.
+$("#btn-refresh").onclick = async () => {
+  $("#btn-refresh").disabled = true;
+  try {
+    if ("caches" in window) await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+    const regs = (await navigator.serviceWorker?.getRegistrations()) || [];
+    await Promise.all(regs.map((r) => r.update().catch(() => {})));
+  } catch {}
+  location.reload();
+};
 $("#btn-log").onclick = () => { $("#log").showModal(); UI.pop($("#log .menu"), { from: 0.9 }); };
 $("#btn-log-close").onclick = () => $("#log").close();
 $("#btn-save-name").onclick = () =>
