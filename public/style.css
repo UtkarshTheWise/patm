@@ -389,7 +389,7 @@ dialog::backdrop { background: rgba(20, 13, 44, .72); }
 .fx-bit { position: absolute; left: 0; top: 0; width: 30px; will-change: transform; }
 .fx-bit .pix { width: 100%; height: auto; }
 .rain { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 6; pointer-events: none; image-rendering: pixelated; }
-.burst { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; padding: 24px; background: rgba(20, 13, 44, .88); overflow: hidden; }
+.burst { position: fixed; inset: 0; z-index: 7; pointer-events: auto; /* #app is pointer-events:none */ cursor: pointer; display: grid; place-items: center; padding: 24px; background: rgba(20, 13, 44, .88); overflow: hidden; }
 .burst[hidden] { display: none; }
 .burst-rays { position: absolute; inset: -60%; background: repeating-conic-gradient(rgba(255, 211, 90, .13) 0 9deg, transparent 9deg 18deg); animation: spin 9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
