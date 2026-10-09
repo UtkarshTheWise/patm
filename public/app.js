@@ -244,8 +244,12 @@ function kissCount() {
 
 function paintDock() {
   if (!state?.paired) return;
+  // Only the combo your last move started is shown; nothing at all until then.
+  const lead = leadCombo();
   for (const el of $$(".combo[data-combo]")) {
-    const prog = comboProgress(Number(el.dataset.combo));
+    const id = Number(el.dataset.combo);
+    el.classList.toggle("show", lead.prog > 0 && lead.id === id);
+    const prog = comboProgress(id);
     el.querySelectorAll("li[data-step]").forEach((li) => li.classList.toggle("on", Number(li.dataset.step) <= prog));
     el.classList.toggle("ready", prog === 2);
   }

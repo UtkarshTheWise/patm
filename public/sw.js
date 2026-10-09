@@ -1,5 +1,5 @@
 // Service worker: shows push notifications and caches the app shell.
-const CACHE = "patm-v6";
+const CACHE = "patm-v7";
 const SHELL = [
   "/", "/index.html", "/style.css", "/app.js", "/sprites.js", "/world.js", "/ui.js", "/music.js",
   "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png",
