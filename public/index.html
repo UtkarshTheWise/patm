@@ -131,16 +131,7 @@
       <footer class="dock" id="dock">
         <p id="msg" class="msg" aria-live="polite">What will you do?</p>
 
-        <div class="combo" id="combo" aria-label="Triple threat combo: Need attention, then Missing you, then Thinking of you">
-          <span class="combo-name">Triple threat</span>
-          <ol class="combo-steps">
-            <li data-step="1"><span class="ico" data-icon="attention"></span></li>
-            <li class="arrow" aria-hidden="true"></li>
-            <li data-step="2"><span class="ico" data-icon="missing"></span></li>
-            <li class="arrow" aria-hidden="true"></li>
-            <li data-step="3"><span class="ico" data-icon="thinking"></span></li>
-          </ol>
-        </div>
+        <div class="combos" id="combos" role="group" aria-label="Combos: three moves in a row"></div>
 
         <div class="moves" id="moves" role="group" aria-label="Attacks">
           <button class="btn move move-attention" data-level="1">

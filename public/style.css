@@ -324,14 +324,15 @@ input:focus-visible { outline: 3px dashed var(--gold0); outline-offset: 3px; }
 .msg::before { content: ""; flex: none; width: 10px; height: 12px; background: var(--gold1); clip-path: polygon(0 0, 100% 50%, 0 100%); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .25; } }
 
-.combo { display: flex; align-items: center; gap: 10px; min-height: 32px; }
-.combo-name { font-size: 15px; font-weight: 600; color: var(--gold0); flex: none; }
-.combo-steps { list-style: none; display: flex; align-items: center; gap: 6px; flex: 1; justify-content: flex-end; }
+.combos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.combo { display: grid; justify-items: start; gap: 3px; min-width: 0; }
+.combo-name { font-size: 13px; font-weight: 600; color: var(--gold0); flex: none; }
+.combo-steps { list-style: none; display: flex; align-items: center; gap: 4px; }
 .combo-steps li:not(.arrow) {
-  display: grid; place-items: center; width: 34px; height: 30px; background: var(--plum0);
+  display: grid; place-items: center; width: 28px; height: 24px; background: var(--plum0);
   box-shadow: 0 0 0 3px var(--ink), inset 0 3px 0 rgba(0, 0, 0, .25);
 }
-.combo-steps li:not(.arrow) .pix { height: 16px; width: auto; opacity: .55; }
+.combo-steps li:not(.arrow) .pix { height: 14px; width: auto; opacity: .55; }
 .combo-steps li.on { background: var(--gold1); box-shadow: 0 0 0 3px var(--ink), inset 0 3px 0 rgba(255, 255, 255, .45); }
 .combo-steps li.on .pix { opacity: 1; }
 .combo-steps li.arrow::before { content: ""; display: block; width: 7px; height: 10px; background: var(--gold2); clip-path: polygon(0 0, 100% 50%, 0 100%); }
@@ -408,8 +409,7 @@ dialog::backdrop { background: rgba(20, 13, 44, .72); }
   .move .ico .pix { height: 20px; }
   .move-mwah { min-height: 50px; }
   .msg { min-height: 2.3em; font-size: 15px; }
-  .combo { min-height: 28px; }
-  .combo-steps li:not(.arrow) { height: 26px; }
+  .combo-steps li:not(.arrow) { height: 22px; }
 }
 @media (max-width: 350px) {
   .move { font-size: 13px; }

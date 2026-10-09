@@ -6,8 +6,11 @@ A battle scene where the move you pick pings your person's phone.
 - Pair with a 6-character code
 - Four attacks: **Need attention**, **Thinking of you**, **Missing you** and **MWAH**
 - **Cooldowns**: 5 seconds after any attack, 3 seconds after MWAH so it can be spammed
-- **Triple threat** combo: Need attention, then Missing you, then Thinking of you within a minute.
-  The third move becomes one loud "TRIPLE THREAT" notification, and both phones get a pop-up
+- **Combos**: three moves in a row within a minute. The last one becomes one loud notification, and both phones get a pop-up
+  - **Triple threat**: Need attention, Missing you, Thinking of you
+  - **Love letter**: Thinking of you, Missing you, MWAH
+  - **Heartbreaker**: MWAH, Need attention, Missing you
+  - **Sweet dreams**: Missing you, Thinking of you, MWAH
 - **Love shower**: spam MWAH (8 within a minute) and a gold button pops up. It sends a notification,
   and when your partner opens the app their screen floods with falling hearts
 - An octopus mood toy you flip between happy / angry / sad: your partner sees it
@@ -16,7 +19,7 @@ A battle scene where the move you pick pings your person's phone.
 - Rename, leave pair, delete account
 
 > **Upgrading from the 3-attack version?** Re-run `supabase/schema.sql` in the Supabase SQL editor.
-> It widens the `pokes.level` check (now 1-6) so MWAH, the shower and the combo can be saved. Until
+> It widens the `pokes.level` check (now 1-9) so MWAH, the shower and the combos can be saved. Until
 > you do, the new moves answer with a "re-run schema.sql" message and the old three keep working.
 
 ## The look

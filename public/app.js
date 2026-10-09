@@ -21,8 +21,21 @@ const MOVES = {
   4: { name: "MWAH", hit: "Smooch delivered.", cd: 3000 },
   5: { name: "Love shower", hit: "Their screen fills with hearts when they open the app.", cd: 5000 },
   6: { name: "Triple threat", hit: "Critical hit!", cd: 5000 },
+  7: { name: "Love letter", hit: "Straight to the heart!", cd: 5000 },
+  8: { name: "Heartbreaker", hit: "Critical hit!", cd: 5000 },
+  9: { name: "Sweet dreams", hit: "Critical hit!", cd: 5000 },
 };
-const COMBO = [1, 3, 2]; // need attention, then missing you, then thinking of you
+// Combos: three moves in a row inside the window; the last one lands as the combo (keep in sync with server.js).
+// Every combo starts with a different move, so the first move says which one you are going for.
+const COMBOS = {
+  6: [1, 3, 2], // attention, missing, thinking
+  7: [2, 3, 4], // thinking, missing, MWAH
+  8: [4, 1, 3], // MWAH, attention, missing
+  9: [3, 2, 4], // missing, thinking, MWAH
+};
+const COMBO_IDS = Object.keys(COMBOS).map(Number);
+const MOVE_ICON = { 1: "attention", 2: "thinking", 3: "missing", 4: "mwah" };
+const MOVE_PHRASE = { 1: "needs attention", 2: "is thinking of you", 3: "misses you", 4: "blew you a kiss" };
 const COMBO_WINDOW_MS = 60_000;
 const SHOWER_NEEDS = 8; // MWAHs in a row-ish to unlock the shower
 const SHOWER_WINDOW_MS = 60_000;
@@ -163,7 +176,7 @@ function setExpr(which, expr, ms) {
 // How the target reacts to a move: heart eyes for the sweet ones, a startle for the pushy ones,
 // dizzy stars for the combo. A grumpy octopus gets flustered by a kiss instead of melting.
 function reaction(level, mood) {
-  if (level === 6) return { face: "dizzy", emote: "dizzy" };
+  if (level >= 6) return { face: "dizzy", emote: "dizzy" };
   if (level === 1) return { face: "shock", emote: "shock" };
   if (level === 4 && mood === "angry") return { face: "shock", emote: "shock" };
   return { face: "love", emote: "love" };
@@ -205,13 +218,18 @@ function startIdle() {
 // ---------- combo + shower bookkeeping ----------
 const mine = () => (state?.recent || []).filter((p) => p.fromMe); // newest first
 
-// 0, 1 or 2 moves of the triple threat already landed (and still fresh).
-function comboProgress() {
+// 0, 1 or 2 moves of a combo already landed (and still fresh).
+function comboProgress(id) {
+  const seq = COMBOS[id];
   const [a, b] = mine();
-  if (a && a.level === COMBO[1] && b && b.level === COMBO[0] && now() - b.at <= COMBO_WINDOW_MS) return 2;
-  if (a && a.level === COMBO[0] && now() - a.at <= COMBO_WINDOW_MS) return 1;
+  if (a && a.level === seq[1] && b && b.level === seq[0] && now() - b.at <= COMBO_WINDOW_MS) return 2;
+  if (a && a.level === seq[0] && now() - a.at <= COMBO_WINDOW_MS) return 1;
   return 0;
 }
+// The combo this move would complete right now, if any.
+const finishes = (level) => COMBO_IDS.find((id) => COMBOS[id][2] === level && comboProgress(id) === 2);
+// The combo furthest along, for the hint line.
+const leadCombo = () => COMBO_IDS.map((id) => ({ id, prog: comboProgress(id) })).sort((x, y) => y.prog - x.prog)[0];
 
 // MWAHs sent since the last shower, inside the window.
 function kissCount() {
@@ -226,9 +244,11 @@ function kissCount() {
 
 function paintDock() {
   if (!state?.paired) return;
-  const prog = comboProgress();
-  $$(".combo-steps li[data-step]").forEach((li) => li.classList.toggle("on", Number(li.dataset.step) <= prog));
-  $("#combo").classList.toggle("ready", prog === 2);
+  for (const el of $$(".combo[data-combo]")) {
+    const prog = comboProgress(Number(el.dataset.combo));
+    el.querySelectorAll("li[data-step]").forEach((li) => li.classList.toggle("on", Number(li.dataset.step) <= prog));
+    el.classList.toggle("ready", prog === 2);
+  }
 
   const k = Math.min(kissCount(), SHOWER_NEEDS);
   $$("#streak i").forEach((i, n) => i.classList.toggle("on", n < k));
@@ -371,7 +391,7 @@ function incoming(s) {
   if (!fresh.length) return;
 
   const who = s.partnerName;
-  const lvl = fresh.some((p) => p.level === 5) ? 5 : fresh.some((p) => p.level === 6) ? 6 : fresh[fresh.length - 1].level;
+  const lvl = fresh.some((p) => p.level === 5) ? 5 : fresh.find((p) => p.level >= 6)?.level || fresh[fresh.length - 1].level;
   const kisses = fresh.filter((p) => p.level === 4).length;
 
   if (lvl === 5) {
@@ -381,15 +401,17 @@ function incoming(s) {
     UI.burst({ title: "LOVE SHOWER!", sub: `${who} is showering you with affection.`, icons: ["missing", "mwah", "missing"], duration: 2600 });
     return;
   }
-  if (lvl === 6) {
+  if (lvl >= 6) {
+    const [x, y, z] = COMBOS[lvl];
+    const name = MOVES[lvl].name.toUpperCase();
     navigator.vibrate?.([200, 100, 200, 100, 400]);
     UI.burst({
-      title: "TRIPLE THREAT!",
-      sub: `${who} needs attention, misses you and is thinking of you. All at once.`,
-      icons: ["attention", "missing", "thinking"], duration: 5200,
+      title: name + "!",
+      sub: `${who} ${MOVE_PHRASE[x]}, ${MOVE_PHRASE[y]} and ${MOVE_PHRASE[z]}. All at once.`,
+      icons: COMBOS[lvl].map((m) => MOVE_ICON[m]), duration: 5200,
     });
-    say(`${who} hit you with a TRIPLE THREAT!`);
-    theyAttack(6);
+    say(`${who} hit you with ${name}!`);
+    theyAttack(lvl);
     return;
   }
   navigator.vibrate?.(60);
@@ -473,9 +495,10 @@ async function useMove(level) {
   if (sending || Date.now() < cooldownUntil || !state?.paired) return;
   sending = true;
   const move = MOVES[level];
-  // The third move of the combo lands as a triple threat, so play it as one.
-  const combo = level === COMBO[2] && comboProgress() === 2;
-  const shown = combo ? 6 : level;
+  // The last move of a combo lands as the combo itself, so play it as one.
+  const comboId = finishes(level);
+  const combo = comboId !== undefined;
+  const shown = combo ? comboId : level;
 
   setCooling(move.cd);
   navigator.vibrate?.(level === 3 || combo ? [80, 40, 80, 40, 120] : level === 5 ? [60, 30, 60, 30, 60] : level === 4 ? 25 : 60);
@@ -488,22 +511,24 @@ async function useMove(level) {
           me: spriteEl("me"), foe: spriteEl("foe"), layer: $("#fx"), scene: WORLD.root, level: shown,
           onHit: () => exchange("me", "foe", shown),
         });
-  say(`${state?.name || "You"} used ${(combo ? MOVES[6] : move).name.toUpperCase()}!`, { instant: level === 4 });
+  say(`${state?.name || "You"} used ${MOVES[shown].name.toUpperCase()}!`, { instant: level === 4 });
 
   try {
     const r = await api("/api/poke", { level });
     render(r.state);
     if (r.combo) {
       UI.burst({
-        title: "TRIPLE THREAT!",
-        sub: `Need attention, missing you, thinking of you. ${state.partnerName} got all three.`,
-        icons: ["attention", "missing", "thinking"], duration: 4200,
+        title: MOVES[r.level].name.toUpperCase() + "!",
+        sub: `${COMBOS[r.level].map((m) => MOVES[m].name).join(", ")}. ${state.partnerName} got all three.`,
+        icons: COMBOS[r.level].map((m) => MOVE_ICON[m]), duration: 4200,
       });
       navigator.vibrate?.([100, 50, 100, 50, 300]);
     }
     await anim;
-    const prog = comboProgress();
-    const cue = r.combo ? "" : prog === 1 ? " Combo started: missing you next." : prog === 2 ? " One more: thinking of you!" : "";
+    const lead = leadCombo();
+    const cue = r.combo || !lead.prog ? ""
+      : lead.prog === 1 ? ` Combo started: ${MOVES[COMBOS[lead.id][1]].name.toLowerCase()} next.`
+      : ` One more: ${MOVES[COMBOS[lead.id][2]].name.toLowerCase()}!`;
     const done = r.delivered ? MOVES[r.level || level].hit : "…but they haven't turned on notifications yet.";
     await say(done + cue, { instant: level === 4 });
   } catch (e) {
@@ -638,6 +663,10 @@ function decorate() {
   $("#pair-duel").innerHTML = duel("happy", "sad");
   $("#wait-duel").innerHTML = duel("happy", "sad");
   $("#boot-heart").innerHTML = SPRITES.heart("pink", 13);
+  $("#combos").innerHTML = COMBO_IDS.map((id) =>
+    `<div class="combo" data-combo="${id}"><span class="combo-name">${MOVES[id].name}</span><ol class="combo-steps">` +
+    COMBOS[id].map((m, i) => `${i ? '<li class="arrow" aria-hidden="true"></li>' : ""}<li data-step="${i + 1}"><span class="ico" data-icon="${MOVE_ICON[m]}"></span></li>`).join("") +
+    `</ol></div>`).join("");
   $("#shower-icon").innerHTML = SPRITES.heart("pink", 9) + SPRITES.heart("red", 11) + SPRITES.heart("blush", 9);
   $("#streak").innerHTML = "<i></i>".repeat(SHOWER_NEEDS);
   for (const el of $$("[data-icon]")) el.innerHTML = SPRITES.icon(el.dataset.icon);

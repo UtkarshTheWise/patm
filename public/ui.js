@@ -121,7 +121,7 @@
   }
 
   // ---------- projectiles ----------
-  const TINT = { 1: "blush", 2: "sky", 3: "red", 4: "pink", 5: "gold", 6: "gold" };
+  const TINT = { 1: "blush", 2: "sky", 3: "red", 4: "pink", 5: "gold", 6: "gold", 7: "pink", 8: "red", 9: "sky" };
   const bit = (level) => (level === 4 ? S.icon("mwah") : S.heart(TINT[level] || "pink", 11));
 
   // Hearts arc from one sprite to the other along a quadratic bezier.
@@ -197,7 +197,7 @@
   // One timeline: wind up, throw, impact, recoil. Resolves when it is done so app.js can
   // write the result line at the right moment. `from` throws at `to`; the same timeline
   // plays when the *partner* attacks you, with the roles swapped.
-  const HEARTS = { 1: 4, 2: 6, 3: 9, 4: 3, 6: 14 };
+  const HEARTS = { 1: 4, 2: 6, 3: 9, 4: 3, 6: 14, 7: 14, 8: 14, 9: 14 };
   function attack(opts) {
     const from = opts.me, to = opts.foe, layer = opts.layer, level = opts.level;
     const world = opts.scene;
@@ -205,7 +205,7 @@
     const quick = level === 4;
     const fr = from.getBoundingClientRect(), tr = to.getBoundingClientRect();
     const dir = tr.left + tr.width / 2 >= fr.left + fr.width / 2 ? 1 : -1; // which way "at them" is
-    const big = level === 3 || level === 6;
+    const combo = level >= 6, big = level === 3 || combo;
     return new Promise((done) => {
       g.killTweensOf([from, to]);
       const tl = g.timeline({
@@ -224,10 +224,10 @@
       tl.add(() => {
         if (opts.onHit) opts.onHit();
         if (level !== 4) {
-          flash(level === 3 || level === 6 ? "#ff4f81" : "#ffffff", level === 3 || level === 6 ? 0.45 : 0.3);
-          shake(world, level === 6 ? 14 : level === 3 ? 10 : 6);
+          flash(big ? "#ff4f81" : "#ffffff", big ? 0.45 : 0.3);
+          shake(world, combo ? 14 : level === 3 ? 10 : 6);
         } else shake(world, 3);
-        sparks(layer, to, level === 3 || level === 6 ? 10 : 5);
+        sparks(layer, to, big ? 10 : 5);
         // the target takes it: shoved back, squashed, wobbles upright again
         g.timeline()
           .to(to, { x: dir * (big ? 30 : quick ? 8 : 18), rotate: dir * (big ? 14 : 7), scaleX: 1.15, scaleY: 0.86, duration: 0.11 })

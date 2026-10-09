@@ -1,5 +1,5 @@
 // Service worker: shows push notifications and caches the app shell.
-const CACHE = "patm-v5";
+const CACHE = "patm-v6";
 const SHELL = [
   "/", "/index.html", "/style.css", "/app.js", "/sprites.js", "/world.js", "/ui.js", "/music.js",
   "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png",
@@ -38,8 +38,8 @@ self.addEventListener("fetch", (e) => {
 self.addEventListener("push", (e) => {
   let data = { title: "pay attention to me", body: "Someone wants you." };
   try { data = { ...data, ...e.data.json() }; } catch {}
-  // 5 = love shower, 6 = triple threat: louder than the rest, and they stay until tapped.
-  const big = data.level === 5 || data.level === 6;
+  // 5 = love shower, 6-9 = combos: louder than the rest, and they stay until tapped.
+  const big = data.level >= 5;
   const vibrate = big ? [300, 100, 300, 100, 300, 100, 600] : data.level === 3 ? [200, 100, 200, 100, 400] : data.level === 4 ? [60] : [120];
   e.waitUntil(Promise.all([
     self.registration.showNotification(data.title, {
