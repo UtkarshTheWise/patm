@@ -2,11 +2,12 @@
   "name": "pay-attention-to-me",
   "version": "0.1.0",
   "private": true,
-  "description": "Tap an attack, your partner gets a push notification. 2D battle-scene PWA.",
+  "description": "Tap an attack, your partner gets a push notification. pixel-art battle-scene PWA.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "art": "node tools/gen-art.js"
   },
   "engines": {
     "node": ">=18"

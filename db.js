@@ -135,7 +135,11 @@ async function claimPokeSlot(profile, cooldownMs) {
 }
 
 async function addPoke(pairId, fromUser, level) {
-  must(await sb.from("pokes").insert({ pair_id: pairId, from_user: fromUser, level }));
+  const { error } = await sb.from("pokes").insert({ pair_id: pairId, from_user: fromUser, level });
+  if (!error) return;
+  // 23514 = check violation: the level column still only allows 1-3 on an older schema.
+  if (error.code === "23514") throw new AppError(503, "New moves need the latest supabase/schema.sql. Re-run it.");
+  throw error;
 }
 
 async function recentPokes(pairId, limit = 10) {

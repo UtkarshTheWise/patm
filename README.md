@@ -1,41 +1,60 @@
 # Pay Attention To Me
 
-A 2D battle scene where the move you pick pings your person's phone.
+A battle scene where the move you pick pings your person's phone.
 
 - Sign in with Google (Supabase Auth)
 - Pair with a 6-character code
-- Three attack options: **Need Attention**, **Thinking of You**, **Missing You**
-- An octopus mood toy you flip between happy / angry / sad — your partner sees it
+- Four attacks: **Need attention**, **Thinking of you**, **Missing you** and **MWAH**
+- **Cooldowns**: 5 seconds after any attack, 3 seconds after MWAH so it can be spammed
+- **Triple threat** combo: Need attention, then Missing you, then Thinking of you within a minute.
+  The third move becomes one loud "TRIPLE THREAT" notification, and both phones get a pop-up
+- **Love shower**: spam MWAH (8 within a minute) and a gold button pops up. It sends a notification,
+  and when your partner opens the app their screen floods with falling hearts
+- An octopus mood toy you flip between happy / angry / sad: your partner sees it
 - Real Web Push (works on iPhone once added to Home Screen, iOS 16.4+)
 - All data in Supabase Postgres: profiles, pairs, push subscriptions, poke history
-- 10-second cooldown, rename, leave pair, delete account
+- Rename, leave pair, delete account
+
+> **Upgrading from the 3-attack version?** Re-run `supabase/schema.sql` in the Supabase SQL editor.
+> It widens the `pokes.level` check (now 1-6) so MWAH, the shower and the combo can be saved. Until
+> you do, the new moves answer with a "re-run schema.sql" message and the old three keep working.
 
 ## The look
 
-A Pokemon-style battle screen in valentine shades — white, red, pink and light blue.
-Both of you are an octopus mood toy on a platform, each with a status box showing
-your name, your current mood and an "attention" bar that fills when the other
-person sends something and fades over a few hours. Underneath is a message box and
-a 2x2 move grid with a `▶` cursor, exactly like picking an attack.
+Two plush octopuses face off on a pixel seabed, built to feel like a 3D diorama of 8-bit
+characters. Everything is full-bleed on a phone: a top bar with your partner's plate, an open
+stage, and a command dock with big thumb-sized buttons. Nothing is fixed-aspect, so nothing is
+cut off or left floating in empty space.
 
-Tapping a move selects it; tapping the selected move sends it. That second tap is
-deliberate — a poke wakes someone's phone, so it shouldn't happen by brushing the
-screen. The message box says which move is armed.
+- **Camera**: swipe (or move the mouse) and the world shifts. Each layer moves by its own depth,
+  so the far rocks barely move while the foreground kelp sweeps past, and the camera drifts back
+  to centre when you let go (`public/world.js`).
+- **Sea life**: bubbles, jellyfish, schools of fish, drifting hearts, light shafts, swaying kelp.
+  It is all CSS animation, so it keeps moving even if GSAP never loads.
+- **Octopus**: redrawn from the plush-toy references in `design-ref/`: round dome, flat petal
+  tentacles, glossy eyes. Pink = happy, purple = angry, teal = sad. The two fighters look at each
+  other, lean into a battle stance and make kiss / ouch faces when a move lands.
+- **UI frames**: gold-trimmed 9-slice pixel frames with corner rivets, not gradients and borders.
+  Buttons are flat pixel fills with a cooldown that drains away in chunky steps.
+- **One tap sends.** The cooldown is the safety net against accidental pokes.
+  (The old two-tap "select, then confirm" went away with the cursor menu.)
 
-Tap your own octopus to flip its mood. The flip is saved after a short pause, and
-your partner only gets a notification if the mood actually ended up different —
-so cycling through all three faces stays silent.
+Tap your own octopus (or "Flip") to change its mood. The flip is saved after a short pause, and
+your partner only gets a notification if the mood actually ended up different, so cycling
+through all three faces stays silent.
 
-- **Art**: every sprite is inline SVG in `public/sprites.js`. No image assets to
-  load, nothing to re-export when a colour changes.
-- **Motion**: [GSAP](https://gsap.com) drives the attack timeline, mood flip,
-  screen transitions, idle bobbing and the heart particles. It is served from
-  `node_modules` at `/vendor/gsap.js` so the app still animates offline.
-- **Fallbacks**: if GSAP fails to load, or the device asks for reduced motion,
-  every animation helper lands on the same end state instantly. The app is fully
-  usable with no animation at all.
-- **Palette**: fixed. The game keeps its valentine colours in dark mode, the same
-  way a game looks the same whatever the phone is set to.
+### Art pipeline
+
+- **Sprites** (`public/sprites.js`): drawn on tiny grids and emitted as inline SVG, one path per
+  colour. No image files; change a colour in one place.
+- **Backdrop + frames** (`public/art/*.png`): baked by `node tools/gen-art.js` (no dependencies).
+  Edit the script and re-run it to restyle the world or the panels.
+  `node tools/preview-sprites.js out.png` dumps a sprite sheet so you can check the art by eye.
+- **Motion**: [GSAP](https://gsap.com) drives the attack timeline, mood flip, screen transitions,
+  idle bobbing and heart particles. It is served from `node_modules` at `/vendor/gsap.js` so the
+  app still animates offline. The shower is a small canvas scaled up with nearest-neighbour.
+- **Fallbacks**: if GSAP fails to load, or the device asks for reduced motion, every animation
+  helper lands on the same end state instantly. The app is fully usable with no animation at all.
 
 ## How it fits together
 

@@ -1,13 +1,13 @@
 {
   "name": "Pay Attention To Me",
   "short_name": "Attention",
-  "description": "A 2D battle scene for asking your person for attention.",
+  "description": "Two octopuses on a pixel seabed. Pick a move and your person gets pinged.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#ffeef4",
-  "theme_color": "#ff5e86",
+  "background_color": "#2a1f5c",
+  "theme_color": "#2a1f5c",
   "icons": [
     {
       "src": "/icons/icon.svg",

@@ -11,7 +11,16 @@ const path = require("path");
 const db = require("./db");
 
 const PORT = process.env.PORT || 3000;
-const POKE_COOLDOWN_MS = 10_000;
+
+// Cooldown that follows each move, keyed by the level just sent. MWAH is short so it can be spammed.
+const COOLDOWN_MS = { 1: 5000, 2: 5000, 3: 5000, 4: 3000, 5: 5000, 6: 5000 };
+const COOLDOWN_SLACK_MS = 400; // forgive network jitter so the client's own timer never gets a 429
+// Triple threat: Need Attention -> Missing You -> Thinking of You, back to back.
+const COMBO = [1, 3, 2];
+const COMBO_WINDOW_MS = 60_000;
+// Love shower unlocks after a burst of MWAH.
+const SHOWER_NEEDS = 7; // the client asks for 8; one spare for a dropped tap
+const SHOWER_WINDOW_MS = 60_000;
 
 // ---------- VAPID keys ----------
 // Production: set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY. Local dev: generated once into data/vapid.json.
@@ -28,11 +37,15 @@ if (!vapid.publicKey || !vapid.privateKey) {
 }
 webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:hello@example.com", vapid.publicKey, vapid.privateKey);
 
-// Levels 1-3 are the three attack options in the battle UI.
+// Levels 1-4 are the buttons in the battle UI; 5 (love shower) is unlocked by spamming MWAH;
+// 6 (triple threat) is what the third move of the combo turns into.
 const LEVELS = {
   1: { title: "NEED ATTENTION!", body: "{name} needs a little attention." },
   2: { title: "Thinking of you", body: "{name} is thinking about you right now." },
   3: { title: "Missing you", body: "{name} misses you. It was super effective." },
+  4: { title: "MWAH 💋", body: "{name} blew you a kiss." },
+  5: { title: "💞 LOVE SHOWER INCOMING 💞", body: "{name} is showering you with affection. Open the app right now!" },
+  6: { title: "💥 TRIPLE THREAT! 💥", body: "{name} needs attention, misses you AND is thinking of you. Do not leave them on read." },
 };
 
 // Pushed when the octopus toy gets flipped.
@@ -74,7 +87,7 @@ async function stateFor(profile) {
   const [partner, pair, recent, hasPush] = await Promise.all([
     db.getPartner(profile),
     db.getPair(profile.pair_id),
-    db.recentPokes(profile.pair_id),
+    db.recentPokes(profile.pair_id, 30),
     db.hasSubscription(profile.id),
   ]);
   return {
@@ -87,6 +100,7 @@ async function stateFor(profile) {
     partnerName: partner?.name || null,
     hasPush,
     recent: recent.map((p) => ({ fromMe: p.from_user === profile.id, level: p.level, at: Date.parse(p.created_at) })),
+    serverNow: Date.now(),
   };
 }
 
@@ -167,10 +181,27 @@ app.post("/api/poke", auth, wrap(async (req, res) => {
   const me = req.profile;
   const partner = await db.getPartner(me);
   if (!partner) return res.status(400).json({ error: "Not paired yet" });
-  if (!(await db.claimPokeSlot(me, POKE_COOLDOWN_MS))) {
-    return res.status(429).json({ error: "Easy there. Wait a few seconds." });
+
+  let level = [1, 2, 3, 4, 5].includes(req.body?.level) ? req.body.level : 1;
+  const now = Date.now();
+  const mine = (await db.recentPokes(me.pair_id, 30)).filter((p) => p.from_user === me.id); // newest first
+  const age = (p) => now - Date.parse(p.created_at);
+
+  if (level === 5) {
+    const kisses = mine.filter((p) => p.level === 4 && age(p) <= SHOWER_WINDOW_MS).length;
+    if (kisses < SHOWER_NEEDS) return res.status(400).json({ error: "Send more MWAH to unlock the shower." });
   }
-  const level = [1, 2, 3].includes(req.body?.level) ? req.body.level : 1;
+  // The cooldown you owe is the one belonging to the move you sent last.
+  const owed = Math.max(0, (COOLDOWN_MS[mine[0]?.level] ?? 5000) - COOLDOWN_SLACK_MS);
+  if (!(await db.claimPokeSlot(me, owed))) {
+    return res.status(429).json({ error: "Easy there. Still recharging." });
+  }
+  // Third move of the combo: upgrade it so the partner gets one loud notification, not a quiet one.
+  const [prev, prev2] = mine;
+  const combo = level === COMBO[2] && prev?.level === COMBO[1] && prev2?.level === COMBO[0] &&
+    age(prev2) <= COMBO_WINDOW_MS;
+  if (combo) level = 6;
+
   await db.addPoke(me.pair_id, me.id, level);
   const tpl = LEVELS[level];
   const delivered = await sendPush(partner.id, {
@@ -178,7 +209,7 @@ app.post("/api/poke", auth, wrap(async (req, res) => {
     body: tpl.body.replace("{name}", me.name),
     level,
   });
-  res.json({ ok: true, delivered, state: await stateFor(me) });
+  res.json({ ok: true, delivered, level, combo, state: await stateFor(me) });
 }));
 
 async function sendPush(userId, payload) {
