@@ -329,6 +329,18 @@
       "..oppppppo...",
       "...ooooooo...",
     ], { o: "o", r: "r", p: "p", w: "w" }),
+    // a heart held in two gold arms
+    hug: fromMap([
+      "..oo.....oo..",
+      ".orro...orro.",
+      "orwrrooorrrro",
+      "orrrrrrrrrrro",
+      "oyorrrrrrroyo",
+      "oyyorrrrroyyo",
+      ".oyyorrroyyo.",
+      "..oyyyoyyyo..",
+      "...ooo.ooo...",
+    ], { o: "o", r: "r", w: "w", y: "y" }),
   };
   // The "missing you" icon is just a heart, kept in the same family.
   const icon = (name, cls) =>

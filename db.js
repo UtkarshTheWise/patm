@@ -134,18 +134,37 @@ async function claimPokeSlot(profile, cooldownMs) {
   return rows.length === 1;
 }
 
-async function addPoke(pairId, fromUser, level) {
-  const { error } = await sb.from("pokes").insert({ pair_id: pairId, from_user: fromUser, level });
+// pokes.amount (kisses in a duel result) arrived later; degrade quietly if the column is missing.
+let hasAmountColumn = true;
+const missingColumn = (e) => e?.code === "42703" || e?.code === "PGRST204";
+
+async function addPoke(pairId, fromUser, level, amount = null) {
+  const row = { pair_id: pairId, from_user: fromUser, level };
+  if (amount != null && hasAmountColumn) row.amount = amount;
+  let { error } = await sb.from("pokes").insert(row);
+  if (error && missingColumn(error) && "amount" in row) {
+    hasAmountColumn = false;
+    console.warn("pokes.amount is missing — re-run supabase/schema.sql.");
+    delete row.amount;
+    ({ error } = await sb.from("pokes").insert(row));
+  }
   if (!error) return;
-  // 23514 = check violation: the level column still only allows 1-3 on an older schema.
+  // 23514 = check violation: the level column still only allows older levels on an older schema.
   if (error.code === "23514") throw new AppError(503, "New moves need the latest supabase/schema.sql. Re-run it.");
   throw error;
 }
 
 async function recentPokes(pairId, limit = 10) {
   if (!pairId) return [];
-  return must(await sb.from("pokes").select("from_user, level, created_at")
-    .eq("pair_id", pairId).order("created_at", { ascending: false }).limit(limit));
+  const q = (cols) => sb.from("pokes").select(cols)
+    .eq("pair_id", pairId).order("created_at", { ascending: false }).limit(limit);
+  if (hasAmountColumn) {
+    const r = await q("from_user, level, created_at, amount");
+    if (!r.error) return r.data;
+    if (!missingColumn(r.error)) throw r.error;
+    hasAmountColumn = false;
+  }
+  return must(await q("from_user, level, created_at"));
 }
 
 async function saveSubscription(userId, sub) {

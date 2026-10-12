@@ -41,8 +41,9 @@
   function type(el, text, opts) {
     const o = opts || {};
     if (!el) return Promise.resolve();
+    // A cancelled line must still resolve its promise, or whoever awaited it (useMove) hangs for good.
     const prev = typing.get(el);
-    if (prev) clearInterval(prev);
+    if (prev) { clearInterval(prev.t); prev.done(); }
     if (!motion || o.instant) { el.textContent = text; typing.delete(el); return Promise.resolve(); }
     el.textContent = "";
     return new Promise((done) => {
@@ -51,7 +52,7 @@
         el.textContent = text.slice(0, ++i);
         if (i >= text.length) { clearInterval(t); typing.delete(el); done(); }
       }, o.speed || 20);
-      typing.set(el, t);
+      typing.set(el, { t, done });
     });
   }
 
@@ -121,8 +122,8 @@
   }
 
   // ---------- projectiles ----------
-  const TINT = { 1: "blush", 2: "sky", 3: "red", 4: "pink", 5: "gold", 6: "gold", 7: "pink", 8: "red", 9: "sky" };
-  const bit = (level) => (level === 4 ? S.icon("mwah") : S.heart(TINT[level] || "pink", 11));
+  const TINT = { 1: "blush", 2: "sky", 3: "red", 4: "pink", 5: "gold", 6: "gold", 7: "pink", 8: "red", 9: "sky", 10: "blush", 11: "pink" };
+  const bit = (level) => (level === 4 || level === 11 ? S.icon("mwah") : S.heart(TINT[level] || "pink", 11));
 
   // Hearts arc from one sprite to the other along a quadratic bezier.
   // Hand-rolled instead of MotionPathPlugin so core GSAP is all we need.
@@ -197,7 +198,7 @@
   // One timeline: wind up, throw, impact, recoil. Resolves when it is done so app.js can
   // write the result line at the right moment. `from` throws at `to`; the same timeline
   // plays when the *partner* attacks you, with the roles swapped.
-  const HEARTS = { 1: 4, 2: 6, 3: 9, 4: 3, 6: 14, 7: 14, 8: 14, 9: 14 };
+  const HEARTS = { 1: 4, 2: 6, 3: 9, 4: 3, 6: 14, 7: 14, 8: 14, 9: 14, 10: 6, 11: 16 };
   function attack(opts) {
     const from = opts.me, to = opts.foe, layer = opts.layer, level = opts.level;
     const world = opts.scene;
@@ -205,7 +206,7 @@
     const quick = level === 4;
     const fr = from.getBoundingClientRect(), tr = to.getBoundingClientRect();
     const dir = tr.left + tr.width / 2 >= fr.left + fr.width / 2 ? 1 : -1; // which way "at them" is
-    const combo = level >= 6, big = level === 3 || combo;
+    const combo = (level >= 6 && level <= 9) || level === 11, big = level === 3 || combo;
     return new Promise((done) => {
       g.killTweensOf([from, to]);
       const tl = g.timeline({

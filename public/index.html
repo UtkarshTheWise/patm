@@ -143,6 +143,9 @@
           <button class="btn move move-missing" data-level="3">
             <span class="ico" data-icon="missing"></span><span class="move-name">Missing you</span>
           </button>
+          <button class="btn move move-hug" data-level="10">
+            <span class="ico" data-icon="hug"></span><span class="move-name">Hug</span>
+          </button>
           <button class="btn move move-mwah" data-level="4" id="btn-mwah">
             <span class="ico" data-icon="mwah"></span>
             <span class="mwah-word">MWAH</span>
@@ -181,6 +184,25 @@
 
     <!-- Triple threat / incoming-shower pop-up -->
     <div id="burst" class="burst" hidden role="alert"></div>
+    <!-- Kiss duel: both partners MWAH at once, then race to tap for 10s -->
+    <div id="kd" class="kd" hidden role="dialog" aria-label="Kiss duel">
+      <div class="kd-head">
+        <h2 class="kd-title">MWAH DUEL!</h2>
+        <div class="kd-score">
+          <span><b id="kd-me-name">You</b><strong id="kd-me">0</strong></span>
+          <span class="kd-vs">VS</span>
+          <span><b id="kd-foe-name"></b><strong id="kd-foe">0</strong></span>
+        </div>
+        <div class="kd-bar"><i id="kd-bar"></i></div>
+      </div>
+      <p id="kd-clock" class="kd-clock" aria-live="assertive">3</p>
+      <button id="kd-tap" class="btn kd-tap wait"><span class="ico" data-icon="mwah"></span><span>MWAH!</span></button>
+      <div id="kd-result" class="kd-result" hidden>
+        <h2 id="kd-res-title"></h2>
+        <p id="kd-res-sub"></p>
+        <button id="kd-close" class="btn btn-small btn-gold">Close</button>
+      </div>
+    </div>
     <canvas id="rain" class="rain" aria-hidden="true"></canvas>
     <div id="fx" class="fx" aria-hidden="true"></div>
     <div id="toast" class="toast" role="status"></div>
@@ -192,6 +214,7 @@
   <script src="/world.js"></script>
   <script src="/ui.js"></script>
   <script src="/music.js"></script>
+  <script src="/sfx.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

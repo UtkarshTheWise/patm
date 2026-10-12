@@ -8,12 +8,13 @@ const express = require("express");
 const webpush = require("web-push");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const db = require("./db");
 
 const PORT = process.env.PORT || 3000;
 
 // Cooldown that follows each move, keyed by the level just sent. MWAH is short so it can be spammed.
-const COOLDOWN_MS = { 1: 5000, 2: 5000, 3: 5000, 4: 3000, 5: 5000, 6: 5000, 7: 5000, 8: 5000, 9: 5000 };
+const COOLDOWN_MS = { 1: 5000, 2: 5000, 3: 5000, 4: 3000, 5: 5000, 6: 5000, 7: 5000, 8: 5000, 9: 5000, 10: 5000, 11: 3000 };
 const COOLDOWN_SLACK_MS = 400; // forgive network jitter so the client's own timer never gets a 429
 // Combos: three moves back to back (1 attention, 2 thinking, 3 missing, 4 MWAH). The last one lands as
 // the combo's own level. Keep in sync with public/app.js.
@@ -27,6 +28,13 @@ const COMBO_WINDOW_MS = 60_000;
 // Love shower unlocks after a burst of MWAH.
 const SHOWER_NEEDS = 7; // the client asks for 8; one spare for a dropped tap
 const SHOWER_WINDOW_MS = 60_000;
+// Kiss duel: both partners MWAH within DUEL_WINDOW_MS -> a 10s tap race. State is in memory (one
+// Node instance); a restart just fizzles a running duel.
+const DUEL_WINDOW_MS = 2500, DUEL_COUNTDOWN_MS = 4000, DUEL_MS = 10_000, DUEL_GRACE_MS = 1500;
+const DUEL_KEEP_MS = 20_000, DUEL_REST_MS = 20_000, DUEL_MAX_TPS = 20;
+const duels = new Map();    // pairId -> duel
+const lastKiss = new Map(); // pairId -> { user, at }
+const duelRest = new Map(); // pairId -> timestamp the post-duel rest ends
 
 // ---------- VAPID keys ----------
 // Production: set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY. Local dev: generated once into data/vapid.json.
@@ -55,7 +63,58 @@ const LEVELS = {
   7: { title: "💌 LOVE LETTER! 💌", body: "{name} is thinking of you, misses you and sent a kiss. Swoon." },
   8: { title: "💔 HEARTBREAKER! 💔", body: "{name} blew a kiss, needs attention and misses you. Reply right now." },
   9: { title: "🌙 SWEET DREAMS! 🌙", body: "{name} misses you, is thinking of you and sent a goodnight kiss." },
+  10: { title: "HUG 🤗", body: "{name} sent you a big warm hug." },
+  11: { title: "💋 MWAH x{n} 💋", body: "{name} won the kiss duel and sent you {n} kisses at once!" },
 };
+
+// ---------- kiss duel ----------
+function startDuel(me, partner) {
+  const startAt = Date.now() + DUEL_COUNTDOWN_MS;
+  const d = {
+    id: crypto.randomUUID(), pairId: me.pair_id, ids: [me.id, partner.id],
+    names: { [me.id]: me.name, [partner.id]: partner.name },
+    taps: { [me.id]: 0, [partner.id]: 0 },
+    startAt, endAt: startAt + DUEL_MS, result: null,
+  };
+  duels.set(d.pairId, d);
+  setTimeout(() => resolveDuel(d).catch(console.error), d.endAt + DUEL_GRACE_MS - Date.now());
+  return d;
+}
+
+function duelView(d, myId) {
+  const other = d.ids.find((i) => i !== myId);
+  const now = Date.now();
+  return {
+    id: d.id, startAt: d.startAt, endAt: d.endAt,
+    me: d.taps[myId], foe: d.taps[other], foeName: d.names[other],
+    status: d.result ? "done" : now < d.startAt ? "countdown" : now < d.endAt ? "active" : "judging",
+    result: d.result && {
+      winner: d.result.winner === null ? "tie" : d.result.winner === myId ? "me" : "foe",
+      mine: d.taps[myId], theirs: d.taps[other],
+    },
+  };
+}
+
+async function resolveDuel(d) {
+  const [a, b] = d.ids;
+  const ta = d.taps[a], tb = d.taps[b];
+  d.result = { winner: ta > tb ? a : tb > ta ? b : null };
+  duelRest.set(d.pairId, Date.now() + DUEL_REST_MS);
+  // One delivery per side that earned it: a lone winner, or both on a non-zero tie.
+  const sends = d.result.winner ? [d.result.winner] : ta > 0 ? [a, b] : [];
+  for (const from of sends) {
+    const to = d.ids.find((i) => i !== from), n = d.taps[from], tpl = LEVELS[11];
+    try {
+      await db.addPoke(d.pairId, from, 11, n);
+      await sendPush(to, {
+        title: tpl.title.replace("{n}", n),
+        body: tpl.body.replace("{name}", d.names[from]).replace("{n}", n),
+        level: 11,
+      });
+    } catch (e) { console.error("duel delivery failed:", e.message || e); }
+  }
+  setTimeout(() => { if (duels.get(d.pairId) === d) duels.delete(d.pairId); }, DUEL_KEEP_MS);
+}
 
 // Pushed when the octopus toy gets flipped.
 const MOOD_PUSH = {
@@ -108,7 +167,10 @@ async function stateFor(profile) {
     paired: !!partner,
     partnerName: partner?.name || null,
     hasPush,
-    recent: recent.map((p) => ({ fromMe: p.from_user === profile.id, level: p.level, at: Date.parse(p.created_at) })),
+    recent: recent.map((p) => ({
+      fromMe: p.from_user === profile.id, level: p.level, at: Date.parse(p.created_at), amount: p.amount ?? null,
+    })),
+    duel: duels.has(profile.pair_id) ? duelView(duels.get(profile.pair_id), profile.id) : null,
     serverNow: Date.now(),
   };
 }
@@ -191,8 +253,23 @@ app.post("/api/poke", auth, wrap(async (req, res) => {
   const partner = await db.getPartner(me);
   if (!partner) return res.status(400).json({ error: "Not paired yet" });
 
-  let level = [1, 2, 3, 4, 5].includes(req.body?.level) ? req.body.level : 1;
+  let level = [1, 2, 3, 4, 5, 10].includes(req.body?.level) ? req.body.level : 1;
   const now = Date.now();
+  // Duel checks run with no await between the read and the write, so two simultaneous MWAHs
+  // can't both miss each other.
+  const live = duels.get(me.pair_id);
+  if (live && !live.result) {
+    return res.status(409).json({ error: "You're mid kiss duel!", duel: duelView(live, me.id) });
+  }
+  if (level === 4 && !(duelRest.get(me.pair_id) > now)) {
+    const k = lastKiss.get(me.pair_id);
+    if (k && k.user === partner.id && now - k.at <= DUEL_WINDOW_MS) {
+      lastKiss.delete(me.pair_id);
+      const d = startDuel(me, partner);
+      return res.json({ ok: true, duel: duelView(d, me.id), state: await stateFor(me) });
+    }
+    lastKiss.set(me.pair_id, { user: me.id, at: now });
+  }
   const mine = (await db.recentPokes(me.pair_id, 30)).filter((p) => p.from_user === me.id); // newest first
   const age = (p) => now - Date.parse(p.created_at);
 
@@ -222,6 +299,21 @@ app.post("/api/poke", auth, wrap(async (req, res) => {
     level,
   });
   res.json({ ok: true, delivered, level, combo, state: await stateFor(me) });
+}));
+
+// Duel taps. The client posts its cumulative count a couple of times a second; the same call
+// returns the live duel so it doubles as the "is there a duel?" check ({} body).
+app.post("/api/duel", auth, wrap(async (req, res) => {
+  const me = req.profile;
+  const d = duels.get(me.pair_id);
+  const id = req.body?.id;
+  if (!d || (id && id !== d.id)) return res.json({ duel: null, serverNow: Date.now() });
+  const taps = req.body?.taps, now = Date.now();
+  if (Number.isInteger(taps) && taps >= 0 && !d.result && now >= d.startAt && now <= d.endAt + DUEL_GRACE_MS) {
+    const cap = Math.ceil((Math.min(now, d.endAt) - d.startAt) / 1000 * DUEL_MAX_TPS) + 5;
+    d.taps[me.id] = Math.max(d.taps[me.id], Math.min(taps, cap));
+  }
+  res.json({ duel: duelView(d, me.id), serverNow: Date.now() });
 }));
 
 async function sendPush(userId, payload) {

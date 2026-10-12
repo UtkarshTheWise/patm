@@ -41,7 +41,8 @@ create table if not exists public.pokes (
   id          bigint generated always as identity primary key,
   pair_id     uuid not null references public.pairs (id) on delete cascade,
   from_user   uuid references public.profiles (id) on delete set null,
-  level       smallint not null check (level between 1 and 9),
+  level       smallint not null check (level between 1 and 11),
+  amount      int,
   created_at  timestamptz not null default now()
 );
 create index if not exists pokes_pair_created_idx on public.pokes (pair_id, created_at desc);
@@ -125,7 +126,9 @@ grant execute on function public.join_pair(uuid, text) to service_role;
 grant execute on function public.leave_pair(uuid)      to service_role;
 
 -- ---------- poke levels ----------
--- 1-3 the original attacks, 4 MWAH, 5 love shower, 6-9 the four combos.
+-- 1-3 the original attacks, 4 MWAH, 5 love shower, 6-9 the four combos, 10 hug,
+-- 11 kiss duel result (pokes.amount = kisses delivered).
 -- Older installs were created with "between 1 and 3", so widen it (safe to re-run).
 alter table public.pokes drop constraint if exists pokes_level_check;
-alter table public.pokes add constraint pokes_level_check check (level between 1 and 9);
+alter table public.pokes add constraint pokes_level_check check (level between 1 and 11);
+alter table public.pokes add column if not exists amount int;

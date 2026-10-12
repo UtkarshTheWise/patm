@@ -19,7 +19,8 @@ A battle scene where the move you pick pings your person's phone.
 - Rename, leave pair, delete account
 
 > **Upgrading from the 3-attack version?** Re-run `supabase/schema.sql` in the Supabase SQL editor.
-> It widens the `pokes.level` check (now 1-9) so MWAH, the shower and the combos can be saved. Until
+> It widens the `pokes.level` check (now 1-11) and adds `pokes.amount` so MWAH, the shower, the combos,
+> hugs and kiss-duel results can be saved. Until
 > you do, the new moves answer with a "re-run schema.sql" message and the old three keep working.
 
 ## The look

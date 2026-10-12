@@ -13,7 +13,8 @@ let pollTimer = null;
 let skew = 0; // server clock minus ours, so "recent" timestamps compare correctly
 
 // Everything you can send. cd is how long you wait afterwards (matches the server).
-// 1-4 are buttons; 5 is the shower an MWAH streak unlocks; 6 is what the combo's last move becomes.
+// 1-4 and 10 (hug) are buttons; 5 is the shower an MWAH streak unlocks; 6-9 are what a combo's last
+// move becomes; 11 is a won kiss duel (delivered by the server, never sent from a button).
 const MOVES = {
   1: { name: "Need attention", hit: "It landed softly.", cd: 5000 },
   2: { name: "Thinking of you", hit: "It was sweet!", cd: 5000 },
@@ -24,6 +25,8 @@ const MOVES = {
   7: { name: "Love letter", hit: "Straight to the heart!", cd: 5000 },
   8: { name: "Heartbreaker", hit: "Critical hit!", cd: 5000 },
   9: { name: "Sweet dreams", hit: "Critical hit!", cd: 5000 },
+  10: { name: "Hug", hit: "Squeezed tight!", cd: 5000 },
+  11: { name: "Kiss duel", hit: "", cd: 3000 },
 };
 // Combos: three moves in a row inside the window; the last one lands as the combo (keep in sync with server.js).
 // Every combo starts with a different move, so the first move says which one you are going for.
@@ -34,8 +37,10 @@ const COMBOS = {
   9: [3, 2, 4], // missing, thinking, MWAH
 };
 const COMBO_IDS = Object.keys(COMBOS).map(Number);
-const MOVE_ICON = { 1: "attention", 2: "thinking", 3: "missing", 4: "mwah" };
-const MOVE_PHRASE = { 1: "needs attention", 2: "is thinking of you", 3: "misses you", 4: "blew you a kiss" };
+const MOVE_ICON = { 1: "attention", 2: "thinking", 3: "missing", 4: "mwah", 10: "hug" };
+const MOVE_PHRASE = { 1: "needs attention", 2: "is thinking of you", 3: "misses you", 4: "blew you a kiss", 10: "sent you a hug" };
+const MOVE_SFX = { 1: "attention", 2: "thinking", 3: "missing", 4: "mwah", 5: "shower", 10: "hug" };
+const isCombo = (level) => level >= 6 && level <= 9;
 const COMBO_WINDOW_MS = 60_000;
 const SHOWER_NEEDS = 8; // MWAHs in a row-ish to unlock the shower
 const SHOWER_WINDOW_MS = 60_000;
@@ -73,6 +78,7 @@ async function api(path, body) {
   if (!res.ok)
     throw Object.assign(new Error(json.error || "Something went wrong"), {
       status: res.status,
+      data: json,
     });
   return json;
 }
@@ -176,7 +182,7 @@ function setExpr(which, expr, ms) {
 // How the target reacts to a move: heart eyes for the sweet ones, a startle for the pushy ones,
 // dizzy stars for the combo. A grumpy octopus gets flustered by a kiss instead of melting.
 function reaction(level, mood) {
-  if (level >= 6) return { face: "dizzy", emote: "dizzy" };
+  if (isCombo(level) || level === 11) return { face: "dizzy", emote: "dizzy" };
   if (level === 1) return { face: "shock", emote: "shock" };
   if (level === 4 && mood === "angry") return { face: "shock", emote: "shock" };
   return { face: "love", emote: "love" };
@@ -187,7 +193,8 @@ function exchange(from, to, level) {
   const r = reaction(level, mood(to));
   setExpr(to, r.face, 1000);
   UI.emote($("#fx"), spriteEl(to), r.emote);
-  setExpr(from, level === 4 ? "mwah" : "cheer", 900);
+  setExpr(from, level === 4 || level === 11 ? "mwah" : "cheer", 900);
+  SFX.play(level === 4 ? "pop" : "hit");
 }
 
 // Idle life: now and then one of them hops and the other notices. Mood decides the flavour.
@@ -264,6 +271,7 @@ function paintDock() {
     pop.hidden = false;
     UI.pop(pop, { from: 0.4 });
     navigator.vibrate?.([40, 30, 40]);
+    SFX.play("unlock");
     say("Your kisses are overflowing. Shower them with love?");
   } else if (!want && !pop.hidden) pop.hidden = true;
 }
@@ -344,13 +352,16 @@ function render(s) {
   for (const p of s.recent.slice(0, 14)) {
     const li = document.createElement("li");
     li.innerHTML = "<span></span><span></span>";
-    li.children[0].textContent = `${p.fromMe ? "You" : s.partnerName} used ${MOVES[p.level]?.name || "Attention"}`;
+    li.children[0].textContent = p.level === 11
+      ? `${p.fromMe ? "You" : s.partnerName} won a kiss duel: MWAH x${p.amount ?? "?"}`
+      : `${p.fromMe ? "You" : s.partnerName} used ${MOVES[p.level]?.name || "Attention"}`;
     li.children[1].textContent = ago(p.at);
     ul.appendChild(li);
   }
 
   paintDock();
   incoming(s);
+  if (s.duel && s.duel.status !== "done" && !kd) enterDuel(s.duel);
 
   if (firstHome) {
     firstHome = false;
@@ -383,7 +394,7 @@ function stopPolling() {
 // Compared against the newest partner move we have already shown, stored on this device.
 // Showers and triple threats get the full treatment; a run of MWAHs is folded into one line.
 function incoming(s) {
-  if (document.hidden || !s.paired) return;
+  if (document.hidden || !s.paired || kd) return; // mid-duel: leave "seen" alone so it replays after
   const theirs = (s.recent || []).filter((p) => !p.fromMe).sort((a, b) => a.at - b.at);
   let seen = null;
   try { seen = localStorage.getItem(SEEN_KEY); } catch {}
@@ -395,19 +406,36 @@ function incoming(s) {
   if (!fresh.length) return;
 
   const who = s.partnerName;
-  const lvl = fresh.some((p) => p.level === 5) ? 5 : fresh.find((p) => p.level >= 6)?.level || fresh[fresh.length - 1].level;
+  // The duel result screen already told you about a duel you just played.
+  if (fresh.every((p) => p.level === 11) && Date.now() - kdEndedAt < 60_000) return;
+  const lvl = fresh.some((p) => p.level === 5) ? 5
+    : fresh.find((p) => isCombo(p.level))?.level || fresh.find((p) => p.level === 11)?.level || fresh[fresh.length - 1].level;
   const kisses = fresh.filter((p) => p.level === 4).length;
 
   if (lvl === 5) {
     UI.shower({ duration: 7.5, peak: 140 });
+    SFX.play("fanfare");
     navigator.vibrate?.([120, 60, 120, 60, 200]);
     say(`${who} showered you with love!`);
     UI.burst({ title: "LOVE SHOWER!", sub: `${who} is showering you with affection.`, icons: ["missing", "mwah", "missing"], duration: 2600 });
     return;
   }
-  if (lvl >= 6) {
+  if (lvl === 11) {
+    const n = fresh.find((p) => p.level === 11).amount ?? "lots of";
+    UI.shower({ duration: 5, peak: 110 });
+    SFX.play("fanfare");
+    navigator.vibrate?.([120, 60, 120, 60, 200]);
+    UI.burst({
+      title: `MWAH x${n}!`, sub: `${who} won a kiss duel and sent you ${n} kisses at once.`,
+      icons: ["mwah", "mwah", "mwah"], duration: 4200,
+    });
+    say(`${who} won a kiss duel!`);
+    return;
+  }
+  if (isCombo(lvl)) {
     const [x, y, z] = COMBOS[lvl];
     const name = MOVES[lvl].name.toUpperCase();
+    SFX.play("fanfare");
     navigator.vibrate?.([200, 100, 200, 100, 400]);
     UI.burst({
       title: name + "!",
@@ -419,6 +447,7 @@ function incoming(s) {
     return;
   }
   navigator.vibrate?.(60);
+  SFX.play("incoming");
   say(kisses > 1 ? `${who} sent you ${kisses} kisses. MWAH x${kisses}!` : `${who} used ${MOVES[lvl].name.toUpperCase()}!`);
   theyAttack(lvl);
 }
@@ -505,6 +534,7 @@ async function useMove(level) {
   const shown = combo ? comboId : level;
 
   setCooling(move.cd);
+  SFX.play(combo ? "combo" : MOVE_SFX[level]);
   navigator.vibrate?.(level === 3 || combo ? [80, 40, 80, 40, 120] : level === 5 ? [60, 30, 60, 30, 60] : level === 4 ? 25 : 60);
   if (level === 5) $("#shower-pop").hidden = true;
 
@@ -520,6 +550,12 @@ async function useMove(level) {
   try {
     const r = await api("/api/poke", { level });
     render(r.state);
+    if (r.duel) { // we were the second MWAH: straight into the duel
+      await anim;
+      enterDuel(r.duel);
+      return;
+    }
+    if (level === 4) watchForDuel();
     if (r.combo) {
       UI.burst({
         title: MOVES[r.level].name.toUpperCase() + "!",
@@ -537,6 +573,8 @@ async function useMove(level) {
     await say(done + cue, { instant: level === 4 });
   } catch (e) {
     await anim;
+    if (e.status === 409 && e.data?.duel) return enterDuel(e.data.duel);
+    SFX.play("error");
     // Nothing was sent, so give the buttons back quickly (a 429 means the server is still recharging).
     setCooling(e.status === 429 ? 2000 : 1200);
     if (level === 5) paintDock();
@@ -546,11 +584,18 @@ async function useMove(level) {
   }
 }
 
+// Button click sound. Moves, the shower pop and the duel pad have their own sounds.
+document.addEventListener("pointerdown", (e) => {
+  const b = e.target.closest && e.target.closest("button");
+  if (b && !b.matches(".move, #kd-tap, #shower-pop")) SFX.play("click");
+});
+
 // Mood toy: tap to flip happy → angry → sad. Saved after a short pause so
 // cycling through faces doesn't ping your partner three times.
 async function flipMyMood() {
   myMood = MOODS[(MOODS.indexOf(myMood) + 1) % MOODS.length];
   navigator.vibrate?.(25);
+  SFX.play("flip");
   await UI.flipMood(spriteEl("me"), () => {
     drawn.me = null;
     paintSprite("me", myMood, "idle");
@@ -582,6 +627,7 @@ for (const b of musicBtns)
   b.onclick = () => {
     MUSIC.toggle();
     paintMusic();
+    SFX.play("click"); // silent when this tap just turned sound off
   };
 paintMusic();
 
@@ -656,6 +702,176 @@ document.addEventListener("visibilitychange", () => {
 navigator.serviceWorker?.addEventListener("message", (e) => {
   if (e.data?.type === "poke" && sb && !document.hidden) refresh();
 });
+
+// ---------- kiss duel ----------
+// Server-authoritative: it hands out startAt/endAt and keeps the best tap count each side reports.
+// We count taps locally, post the running total twice a second, and show whatever it says back.
+let kd = null; // { id, startAt, endAt, mine, foe, phase, syncing, lastOk, tick, loop, result, closeT, shown }
+let kdEndedAt = 0;
+let duelWatch = null;
+
+// After sending an MWAH, look for a duel the other side may have just started with us.
+function watchForDuel() {
+  clearInterval(duelWatch);
+  let n = 0;
+  duelWatch = setInterval(async () => {
+    if (kd || ++n > 7) return clearInterval(duelWatch);
+    try {
+      const r = await api("/api/duel", {});
+      if (r.serverNow) skew = r.serverNow - Date.now();
+      if (r.duel && r.duel.status !== "done" && !kd) { clearInterval(duelWatch); enterDuel(r.duel); }
+    } catch {}
+  }, 700);
+}
+
+function enterDuel(v) {
+  if (kd || !v || v.status === "done" || v.endAt < now()) return;
+  clearTimeout(cdTimer); endCooling();
+  clearInterval(duelWatch);
+  UI.closeBurst();
+  kd = { id: v.id, startAt: v.startAt, endAt: v.endAt, mine: 0, foe: v.foe || 0, phase: "countdown", lastOk: Date.now(), shown: null };
+  $("#kd-me-name").textContent = state?.name || "You";
+  $("#kd-foe-name").textContent = v.foeName || state?.partnerName || "";
+  $("#kd-me").textContent = "0";
+  $("#kd-foe").textContent = String(kd.foe);
+  $("#kd-bar").style.width = "50%";
+  $("#kd-result").hidden = true;
+  $("#kd-tap").style.visibility = "";
+  $("#kd-tap").classList.add("wait");
+  $("#kd-clock").textContent = "";
+  $("#kd").hidden = false;
+  document.body.classList.add("dueling");
+  UI.pop($("#kd .kd-head"));
+  SFX.play("duelStart");
+  say("MWAH DUEL! Tap as fast as you can!", { instant: true });
+  kd.tick = setInterval(kdTick, 100);
+  kd.loop = setInterval(kdSync, 500);
+  kdTick();
+}
+
+function kdTick() {
+  if (!kd || kd.result) return;
+  const t = now(), clock = $("#kd-clock");
+  if (kd.phase === "countdown") {
+    if (t < kd.startAt) {
+      const n = Math.ceil((kd.startAt - t) / 1000);
+      if (kd.shown !== n) {
+        kd.shown = n;
+        clock.textContent = String(n);
+        SFX.play("count");
+        UI.pop(clock, { from: 0.5 });
+      }
+      return;
+    }
+    kd.phase = "active";
+    clock.textContent = "GO!";
+    $("#kd-tap").classList.remove("wait");
+    SFX.play("go");
+    UI.flash("#fff0a8", 0.5);
+    UI.pop(clock, { from: 0.5 });
+  }
+  if (kd.phase === "active") {
+    if (t < kd.endAt) {
+      if (t - kd.startAt > 600) clock.textContent = ((kd.endAt - t) / 1000).toFixed(1);
+      return;
+    }
+    kd.phase = "judging";
+    clock.textContent = "TIME!";
+    $("#kd-tap").classList.add("wait");
+    SFX.play("time");
+    kdSync();
+  }
+  // Server restarted, or we lost the connection: don't hang on the overlay forever.
+  if (kd.phase === "judging" && t > kd.endAt + 8000) kdExit("The duel fizzled out.");
+}
+
+function kdPaintScores() {
+  $("#kd-me").textContent = String(kd.mine);
+  $("#kd-foe").textContent = String(kd.foe);
+  const total = kd.mine + kd.foe;
+  $("#kd-bar").style.width = (total ? (kd.mine / total) * 100 : 50) + "%";
+}
+
+function kdTap(e) {
+  if (!kd || kd.phase !== "active") return;
+  e.preventDefault();
+  kd.mine++;
+  kdPaintScores();
+  SFX.play("tap", kd.mine);
+  navigator.vibrate?.(8);
+  const b = $("#kd-tap");
+  b.classList.add("hit");
+  setTimeout(() => b.classList.remove("hit"), 60);
+  if (kd.mine % 3 === 0) UI.hearts($("#fx"), spriteEl("me"), spriteEl("foe"), 1, 4);
+}
+// pointerdown only (no click handler), or every tap would count twice
+$("#kd-tap").addEventListener("pointerdown", kdTap);
+$("#kd-tap").addEventListener("keydown", (e) => {
+  if ((e.key === " " || e.key === "Enter") && !e.repeat) kdTap(e);
+});
+
+async function kdSync() {
+  const cur = kd;
+  if (!cur || cur.syncing || cur.result) return;
+  cur.syncing = true;
+  try {
+    const r = await api("/api/duel", { id: cur.id, taps: cur.mine });
+    if (kd !== cur) return;
+    if (r.serverNow) skew = r.serverNow - Date.now();
+    if (!r.duel) return kdExit("The duel fizzled out.");
+    cur.foe = r.duel.foe;
+    cur.lastOk = Date.now();
+    kdPaintScores();
+    if (r.duel.result) kdResult(r.duel.result);
+  } catch {
+    // transient network error: the next tick retries
+  } finally {
+    cur.syncing = false;
+  }
+}
+
+function kdResult(res) {
+  if (!kd || kd.result) return;
+  kd.result = res;
+  clearInterval(kd.tick); clearInterval(kd.loop);
+  $("#kd-tap").classList.add("wait");
+  $("#kd-tap").style.visibility = "hidden"; // keep the result card clean
+  $("#kd-clock").textContent = "";
+  const who = state?.partnerName || "They";
+  let title, sub, sound = "win", fizzle = false;
+  if (res.winner === "me") {
+    title = "YOU WIN!"; sub = `${res.mine} kisses sent to ${who} at once!`;
+  } else if (res.winner === "foe") {
+    title = `${who} WINS!`; sub = `${res.theirs} kisses incoming! MWAH x${res.theirs}`; sound = "lose";
+  } else if (res.mine === 0) {
+    title = "FIZZLE"; sub = "Nobody tapped."; sound = "lose"; fizzle = true;
+  } else {
+    title = "DRAW!"; sub = `Kisses both ways: ${res.mine} each.`; sound = "draw";
+  }
+  $("#kd-res-title").textContent = title;
+  $("#kd-res-sub").textContent = sub;
+  $("#kd-result").hidden = false;
+  UI.pop($("#kd-result"), { from: 0.6 });
+  SFX.play(sound);
+  if (!fizzle) UI.shower({ duration: 3.5, peak: 90 });
+  navigator.vibrate?.([80, 40, 80, 40, 200]);
+  kd.closeT = setTimeout(() => kdExit(), 7000);
+}
+
+function kdExit(msg) {
+  if (!kd) return;
+  clearInterval(kd.tick); clearInterval(kd.loop); clearTimeout(kd.closeT);
+  kd = null;
+  kdEndedAt = Date.now();
+  $("#kd").hidden = true;
+  $("#kd-result").hidden = true;
+  $("#kd-tap").classList.add("wait");
+  document.body.classList.remove("dueling");
+  if (msg) toast(msg);
+  idlePrompt();
+  refresh();
+}
+$("#kd-close").onclick = () => kdExit();
 
 // ---------- dressing the screens ----------
 function decorate() {
